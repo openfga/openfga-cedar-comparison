@@ -1,0 +1,70 @@
+// Cedar Schema for Document Management System
+namespace DocumentManagement {
+    
+    // Entity Types
+    entity User {
+        organization?: Organization,
+    };
+    
+    entity Document {
+        name: String,
+        organization: Organization,
+        owner?: User,
+        parent_folder?: Folder,
+        editors?: Set<User>,
+        viewers?: Set<User>,
+    };
+    
+    entity Folder {
+        name: String,
+        organization: Organization,
+        owner?: User,
+        editors?: Set<User>,
+        viewers?: Set<User>,
+    };
+    
+    entity Organization {
+        name: String,
+    };
+    
+    // Actions
+    action ViewDocument appliesTo {
+        principal: User,
+        resource: Document,
+    };
+    
+    action EditDocument appliesTo {
+        principal: User,
+        resource: Document,
+    };
+    
+    action DeleteDocument appliesTo {
+        principal: User,
+        resource: Document,
+    };
+    
+    action ShareDocument appliesTo {
+        principal: User,
+        resource: Document,
+    };
+    
+    action ViewFolder appliesTo {
+        principal: User,
+        resource: Folder,
+    };
+    
+    action EditFolder appliesTo {
+        principal: User,
+        resource: Folder,
+    };
+    
+    action DeleteFolder appliesTo {
+        principal: User,
+        resource: Folder,
+    };
+    
+    action ShareFolder appliesTo {
+        principal: User,
+        resource: Folder,
+    };
+}

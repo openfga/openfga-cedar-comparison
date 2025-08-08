@@ -1,0 +1,104 @@
+# Organization memberships - matching Cedar test data
+- user: user:alice
+  relation: member
+  object: organization:org1
+
+- user: user:bob
+  relation: member
+  object: organization:org1
+
+- user: user:charlie
+  relation: member
+  object: organization:org1
+
+- user: user:david
+  relation: member
+  object: organization:org2
+
+- user: user:eve
+  relation: member
+  object: organization:org2
+
+# Folder setup - matching Cedar schema
+- user: organization:org1
+  relation: organization
+  object: folder:folder1
+
+- user: user:alice
+  relation: owner
+  object: folder:folder1
+
+- user: organization:org2
+  relation: organization
+  object: folder:folder2
+
+- user: user:david
+  relation: owner
+  object: folder:folder2
+
+# Documents setup - matching Cedar test data
+- user: organization:org1
+  relation: organization
+  object: document:doc1
+
+- user: user:alice
+  relation: owner
+  object: document:doc1
+
+- user: folder:folder1
+  relation: parent_folder
+  object: document:doc1
+
+- user: organization:org1
+  relation: organization
+  object: document:doc2
+
+- user: user:bob
+  relation: owner
+  object: document:doc2
+
+- user: folder:folder1
+  relation: parent_folder
+  object: document:doc2
+
+- user: organization:org2
+  relation: organization
+  object: document:doc3
+
+- user: user:david
+  relation: owner
+  object: document:doc3
+
+- user: folder:folder2
+  relation: parent_folder
+  object: document:doc3
+
+- user: organization:org1
+  relation: organization
+  object: document:doc4
+
+- user: user:alice
+  relation: owner
+  object: document:doc4
+
+# Explicit document permissions - matching Cedar test data
+- user: user:charlie
+  relation: viewer
+  object: document:doc2
+
+- user: user:bob
+  relation: editor
+  object: document:doc4
+
+- user: user:charlie
+  relation: viewer
+  object: document:doc4
+
+# Folder permissions - matching Cedar test data
+- user: user:bob
+  relation: viewer
+  object: folder:folder1
+
+- user: user:eve
+  relation: editor
+  object: folder:folder2

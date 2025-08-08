@@ -1,0 +1,45 @@
+name: Document Management System Authorization Model Tests
+model_file: ./document-management.fga
+
+tuple_file: ./document-management-tuples.yaml
+
+tests:
+  # Test organization member access
+  - name: Alice can view doc1 as owner
+    check:
+      - user: user:alice
+        object: document:doc1
+        assertions:
+          can_view: true
+          can_edit: true
+          can_delete: true
+
+  # Test organization member with folder permissions
+  - name: Charlie can view doc2 through folder permission
+    check:
+      - user: user:charlie
+        object: document:doc2
+        assertions:
+          can_view: true
+          can_edit: false
+          can_delete: false
+
+  # Test cross-organization denial
+  - name: David cannot view doc1 (different organization)
+    check:
+      - user: user:david
+        object: document:doc1
+        assertions:
+          can_view: false
+          can_edit: false
+          can_delete: false
+
+  # Test explicit document permission
+  - name: Bob can view doc4 through explicit editor permission
+    check:
+      - user: user:bob
+        object: document:doc4
+        assertions:
+          can_view: true
+          can_edit: true
+          can_delete: false
