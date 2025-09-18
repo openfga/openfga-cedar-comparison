@@ -6,8 +6,6 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    principal has organization &&
-    resource has organization &&
     principal.organization == resource.organization
 };
 
@@ -17,8 +15,6 @@ permit(
     action == DocumentManagement::Action::"ViewFolder",
     resource
 ) when {
-    principal has organization &&
-    resource has organization &&
     principal.organization == resource.organization
 };
 
@@ -33,7 +29,7 @@ permit(
     ],
     resource
 ) when {
-    resource has owner && principal == resource.owner
+    principal == resource.owner
 };
 
 // Document editor can edit and share documents they edit
@@ -45,7 +41,7 @@ permit(
     ],
     resource
 ) when {
-    resource has editors && principal in resource.editors
+    principal in resource.editors
 };
 
 // Document viewer can view documents
@@ -54,7 +50,7 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    resource has viewers && principal in resource.viewers
+    principal in resource.viewers
 };
 
 // Folder owner can perform all actions on their folders
@@ -68,7 +64,7 @@ permit(
     ],
     resource
 ) when {
-    resource has owner && principal == resource.owner
+    principal == resource.owner
 };
 
 // Folder editor can view, edit, and share folders (but not delete)
@@ -81,7 +77,7 @@ permit(
     ],
     resource
 ) when {
-    resource has editors && principal in resource.editors
+    principal in resource.editors
 };
 
 // Folder editor can view, edit, and share documents in their folders
@@ -94,8 +90,6 @@ permit(
     ],
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has editors &&
     principal in resource.parent_folder.editors
 };
 
@@ -109,8 +103,6 @@ permit(
     ],
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has owner &&
     principal == resource.parent_folder.owner
 };
 
@@ -120,7 +112,7 @@ permit(
     action == DocumentManagement::Action::"ViewFolder",
     resource
 ) when {
-    resource has viewers && principal in resource.viewers
+    principal in resource.viewers
 };
 
 // Folder viewers can view documents in folders
@@ -129,7 +121,5 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has viewers &&
     principal in resource.parent_folder.viewers
 };
