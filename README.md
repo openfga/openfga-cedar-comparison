@@ -333,7 +333,7 @@ WITH user_org AS (
 	) dp ON true
 ```
 
-There are other ways to write a single query with the same results, or you can execute multiple queries. After you retrieve the data, you need to convert it to an instance of a Cedar Entity. The [cedar/main.go](cedar/main.go) program has the full example.
+There are other ways to write a single or multiple queries and get a similar results. After you retrieve the data, you need to convert it to an instance of a Cedar Entity. The [cedar/main.go](cedar/main.go) program has the full example.
 
 ## OpenFGA's Contextual Tuples
 
