@@ -26,7 +26,7 @@ echo "📦 Starting OpenFGA and PostgreSQL..."
 docker-compose up -d
 
 echo "⏳ Waiting for OpenFGA to be ready..."
-sleep 10
+sleep 2
 
 # Wait for OpenFGA to be healthy
 until curl -f http://localhost:8080/healthz &>/dev/null; do
