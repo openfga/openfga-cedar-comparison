@@ -46,7 +46,7 @@ OpenFGA uses a relationship-based model where permissions are derived from relat
    ./setup.sh
    ```
    This automatically:
-   - Starts OpenFGA and PostgreSQL
+   - Starts OpenFGA using an in-memory database
    - Creates store and authorization model
    - Writes test tuples
    - Builds the Go application
@@ -97,7 +97,7 @@ source .env
 - **`document-management.fga`**: OpenFGA authorization model in DSL format  
 - **`document-management-tuples.yaml`**: Relationship tuples (test data)
 - **`document-management.fga.yaml`**: Test cases for the authorization model
-- **`docker-compose.yml`**: OpenFGA + PostgreSQL setup
+- **`docker-compose.yml`**: OpenFGA setup
 - **`setup.sh`**: Automated setup script
 
 ## Key Functions
@@ -152,7 +152,7 @@ Access the web UI at http://localhost:3001 to:
 ## Cleanup
 
 ```bash
-docker-compose down -v  # Removes containers and volumes
+docker-compose down  # Removes containers
 ```
 
 ## Learning More
