@@ -1,11 +1,67 @@
 
-This repository demostrates two different approach for implementing modern application authorization comparing two open source tools: OpenFGA and Cedar.
+# Authorization Frameworks Comparison: Cedar vs OpenFGA
 
-We'll do it by implementing authorization for a multi-tenant document management system that defines 'organizations' that can own 'folders' with 'documents'.
+> A comprehensive comparison of two modern authorization frameworks through a practical document management system example.
 
-Both Cedar and OpenFGA have their own domain specific languages to define authorization policies and schema.  
+## Table of Contents
+- [Overview](#overview)
+- [The Problem](#the-problem)
+- [Quick Start](#quick-start)
+- [Architecture Comparison](#architecture-comparison)
+- [Implementation Details](#implementation-details)
+- [Trade-offs Analysis](#trade-offs-analysis)
+- [When to Choose Each](#when-to-choose-each)
 
-In OpenFGA model you define the schema and policies in a single model:
+## Overview
+
+This repository demonstrates two different approaches for implementing modern application authorization by comparing two open source tools: [OpenFGA](https://openfga.dev/) and [Cedar](https://www.cedarpolicy.com).
+
+We implement authorization for a **multi-tenant document management system** with organizations that own folders containing documents - a common real-world scenario that showcases the strengths and trade-offs of each approach.
+
+## The Problem
+
+We need authorization for a document management system with these requirements:
+
+### Business Rules
+1. **Organization-based access**: Users can view documents in their organization
+2. **Ownership**: Document/folder owners have full access (view, edit, delete, share)
+3. **Explicit permissions**: Grant editor/viewer permissions on documents and folders
+4. **Inheritance**: Folder permissions apply to contained documents
+
+### Test Scenarios
+- ✅ **alice can view doc1**: She's the owner
+- ✅ **charlie can view doc2**: Organization member + folder viewer permission
+- ❌ **david cannot view doc1**: Different organization, no permissions
+- ✅ **bob can view doc4**: Explicit editor permission
+
+## Quick Start
+
+### Prerequisites
+- Go 1.19+
+- Docker and Docker Compose
+- curl (for setup scripts)
+
+### Try OpenFGA Example
+```bash
+cd openfga/
+./setup.sh
+./openfga-check alice doc1    # ✅ Owner access
+./openfga-check david doc1    # ❌ Cross-organization denied
+```
+
+### Try Cedar Example  
+```bash
+cd cedar/
+./setup.sh
+./cedar-check alice doc1     # ✅ Owner access
+./cedar-check david doc1     # ❌ Cross-organization denied
+```
+
+Both examples provide identical authorization decisions using different approaches.
+
+## Architecture Comparison
+
+### OpenFGA: Relationship-Based Authorization
 
 ```dsl.openfga
 model
@@ -19,10 +75,11 @@ type organization
 
 type folder
   relations
+    # define parent: [folder] -> Not added because Cedar does not support recursion
     define organization: [organization]
     define owner: [user]
-    define editor: [user] or owner
-    define viewer: [user] or editor or member from organization
+    define editor: [user] or owner # or editor from parent 
+    define viewer: [user] or editor or member from organization # or viewer from parent 
 
     define can_view: viewer
     define can_edit: editor
@@ -43,7 +100,9 @@ type document
     define can_share: owner or editor
 ```
 
-In Cedar you can define an entity schema that you can use to validate policies, but is not a requirement. You can find the schema we use for this example [here](cedar/schema.cedarschema). You define the authorization policies in the Cedar language:
+> Given that OpenFGA supports recursion, like inheriting folder's permissions, but Cedar does not, we won't be using recursion throughout this example.
+
+In Cedar you can define an entity schema that you can use to validate policies, but is not a requirement. You can find the schema we use for this example [here](cedar/schema.cedarschema). You define the authorization policies in the [Cedar language](https://docs.cedarpolicy.com/policies/syntax-policy.html):
 
 ```
 // Document Management Authorization Policies
@@ -54,8 +113,6 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    principal has organization &&
-    resource has organization &&
     principal.organization == resource.organization
 };
 
@@ -65,8 +122,6 @@ permit(
     action == DocumentManagement::Action::"ViewFolder",
     resource
 ) when {
-    principal has organization &&
-    resource has organization &&
     principal.organization == resource.organization
 };
 
@@ -81,7 +136,7 @@ permit(
     ],
     resource
 ) when {
-    resource has owner && principal == resource.owner
+    principal == resource.owner
 };
 
 // Document editor can edit and share documents they edit
@@ -93,7 +148,7 @@ permit(
     ],
     resource
 ) when {
-    resource has editors && principal in resource.editors
+    principal in resource.editors
 };
 
 // Document viewer can view documents
@@ -102,7 +157,7 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    resource has viewers && principal in resource.viewers
+    principal in resource.viewers
 };
 
 // Folder owner can perform all actions on their folders
@@ -116,7 +171,7 @@ permit(
     ],
     resource
 ) when {
-    resource has owner && principal == resource.owner
+    principal == resource.owner
 };
 
 // Folder editor can view, edit, and share folders (but not delete)
@@ -129,7 +184,7 @@ permit(
     ],
     resource
 ) when {
-    resource has editors && principal in resource.editors
+    principal in resource.editors
 };
 
 // Folder editor can view, edit, and share documents in their folders
@@ -142,8 +197,6 @@ permit(
     ],
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has editors &&
     principal in resource.parent_folder.editors
 };
 
@@ -157,8 +210,6 @@ permit(
     ],
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has owner &&
     principal == resource.parent_folder.owner
 };
 
@@ -168,7 +219,7 @@ permit(
     action == DocumentManagement::Action::"ViewFolder",
     resource
 ) when {
-    resource has viewers && principal in resource.viewers
+    principal in resource.viewers
 };
 
 // Folder viewers can view documents in folders
@@ -177,61 +228,70 @@ permit(
     action == DocumentManagement::Action::"ViewDocument",
     resource
 ) when {
-    resource has parent_folder &&
-    resource.parent_folder has viewers &&
     principal in resource.parent_folder.viewers
 };
 ```
 
-Both policies are equivalent and hopefully self-explanatory. The approaches are very different though. In OpenFGA you can define all the different ways a user can get a permission in a single line (e.g. ` define viewer: [user] or editor or viewer from parent_folder or member from organization`), and in Cedar you could one define multiple `permit` clauses.
+Both policies are equivalent and hopefully self-explanatory. The approaches are very different though. In OpenFGA permissions are defined in terms of relations, which lets you define all the different ways a user can get a permission in a single line (e.g. ` define viewer: [user] or editor or viewer from parent_folder or member from organization`) while navigating resources hierarchies, and in Cedar you need to define define multiple `permit` clauses.
 
-However, the main difference in both approaches is the application architecture:
+## Key Architectural Differences
 
-- OpenFGA runs as a service, and it's a permission database. All the data required to make authorization decisions should be stored in OpenFGA. Making an access control check requires a network roundtrip.
+**OpenFGA: Service-Based Authorization**
+- Runs as a separate service with its own database
+- All authorization data stored in OpenFGA
+- Single API call for authorization decisions
+- Requires network roundtrip for each check
 
-- Cedar runs as a library, and you need to retrieve the data you need to make authorization decisions first, and then call Cedar to evaluate the policy.
+**Cedar: Library-Based Authorization** 
+- Runs as an embedded library in your application
+- Data retrieved from your existing databases
+- No network calls, but requires you to load the data
+- Authorization logic coupled with data access
 
-We'll explore how to implement both to illustrate the trade offs of each approach. 
+## Implementation Examples
 
-## Implementing the OpenFGA solution
-
-- Deploy OpenFGA in a cluster, connected to a MySQL or Postgres database.
-- Configure OpenFGA to use the Authorization model you want.
-- Write authorization data to the OpenFGA database. This requires you to implement a data synchornization mechanism. A few options are described [here](https://auth0.com/blog/handling-the-dual-write-problem-in-distributed-systems/). 
-- Call the OpenFGA Check API to know if a user can perform an action on a resource.
-
-The `openfga/setup.sh` script runs OpenFGA + Postgres in docker, uploads the model and data to a database. The `openfga/main.go` program shows how to perform an authorization check, which is basically like:
+### OpenFGA Authorization Check
 
 ```go
 func checkAuthorization(fgaClient *client.OpenFgaClient, userID, documentID string) (bool, error) {
-	// Create check request
-	body := client.ClientCheckRequest{
-		User:     fmt.Sprintf("user:%s", userID),
-		Relation: "can_view",
-		Object:   fmt.Sprintf("document:%s", documentID),
-	}
+    body := client.ClientCheckRequest{
+        User:     fmt.Sprintf("user:%s", userID),
+        Relation: "can_view", 
+        Object:   fmt.Sprintf("document:%s", documentID),
+    }
 
-	// Execute check
-	data, err := fgaClient.Check(context.Background()).Body(body).Execute()
-	if err != nil {
-		return false, fmt.Errorf("check request failed: %w", err)
-	}
+    data, err := fgaClient.Check(context.Background()).Body(body).Execute()
+    if err != nil {
+        return false, fmt.Errorf("check request failed: %w", err)
+    }
 
-	return *data.Allowed, nil
+    return *data.Allowed, nil
 }
 ```
-## Implementing the Cedar solution
 
-- Cedar does not require any specific infrastructure. There are implementations for Go and Rust, and bindings to other languages like Java (.. what else? links)
-
-- The call to the Cedar engine is pretty simple too:
+### Cedar Authorization Check
 
 ```go
-	decision, diagnostic := cedar.Authorize(policySet, entities, request)
+// 1. Load data from your database
+data, err := queryEntityData(db, userID, documentID)
+if err != nil {
+    return false, err
+}
+
+// 2. Build Cedar entities from the data
+entities := buildCedarEntities(data)
+
+// 3. Create authorization request
+request := cedar.Request{
+    Principal: cedar.NewEntityUID("User", userID),
+    Action:    cedar.NewEntityUID("Action", "ViewDocument"), 
+    Resource:  cedar.NewEntityUID("Document", documentID),
+}
+
+// 4. Authorize with Cedar
+decision, _ := cedar.Authorize(policySet, entities, request)
+return decision == cedar.Allow, nil
 ```
-
-- In the line above, the 'policySet' is the policy, the entities is the data required to make the decision, and the request includes the user/action/resource you want to authorize.
-
 In the Cedar example, we are using this SQL query to retrieve the data required to know if a user can view a document:
 
 ```sql
@@ -273,42 +333,86 @@ WITH user_org AS (
 	) dp ON true
 ```
 
-There are other ways to write a single query with the same results, or you can execute multiple queries. After you retrieve the data, you need to convert it to an instance of a Cedar Entity.
+There are other ways to write a single query with the same results, or you can execute multiple queries. After you retrieve the data, you need to convert it to an instance of a Cedar Entity. The [cedar/main.go](cedar/main.go) program has the full example.
 
-The [cedar/main.go](cedar/main.go) program has the full example.
+## OpenFGA's Contextual Tuples
 
-## Trade Offs
+In general, when using OpenFGA, you will store all the data required to make authorization decisions in OpenFGA. When using Cedar, you'll store it in your application.
 
-### Latency
+However, OpenFGA allows a hybrid model, where you can actually specify the data required to make the decision in [Contextual Tuples](https://openfga.dev/docs/interacting/contextual-tuples). Conceptually, you can do something equivalent to what the Cedar example shows, get all the data from a SQL database, and send it as part of the authorization request.
 
-OpenFGA requires a network call, but the database queries are optimized for the specific query patterns, and OpenFGA can cache parts of the graph to resolve queries faster.
+It would not make sense to use OpenFGA that way, though. If in all scenarios you are going to first retrieve the data from your database, Cedar is a better option.
 
-Cedar does not require a network call to evaluate a policy, but it requires loading the data. Total latency will depend on how expensive is to retrieve it. If it's a simple database call, it will be super fast. If it's a complex SQL query or if it requires data from multiple services, it will be slower.
+On the other hand, combining having data in OpenFGA AND sending contextual data gives you a lot of flexibility. If you can easily synchronize data to OpenFGA, you'd do that. When you can't, because data is not stored in a database (e.g. the content of an access token), or because synchronizing it is hard, you can send it as part of the request.
 
-### Access Control Checks Complexity
+## Trade-offs Analysis
 
-Performing Access Control checks in OpenFGA is very easy. You only call the `check` API, and OpenFGA has all the data required to answer the query. They can be easily integrated into an API Gateway, as there's no additional data required.
+| Aspect | OpenFGA | Cedar |
+|--------|---------|-------|
+| **Latency** | Network call required, but optimized for relationship queries | No network call, but requires data loading |
+| **Complexity** | Simple API calls, easy integration | Complex data loading and entity building |
+| **Maintainability** | Policy changes don't affect app code | Policy changes may require SQL changes |
+| **Operations** | Requires running separate service + database | No additional infrastructure |
+| **List Operations** | Native "list all documents user can view" | Requires custom SQL, post-filtering or experimental partial evaluation |
+| **Data Consistency** | Dual-write problem for data sync | Uses existing transactional data |
+| **Recursion** | Does support modeling recursive permissions | It does not support recursive permissions |
 
-In Cedar, you first need to retrieve the data, and transform it to Cedar Entity object instances. This adds complexity when making authorizatoin checks, and makes it more difficult to integrate in API gateways.
+### Detailed Trade-offs
 
-### Maintainability
+#### **Latency**
+- **OpenFGA**: Network roundtrip required, but queries are optimized and cacheable
+- **Cedar**: No network call, but data loading latency depends on query complexity
 
-What happens if a policy changes? 
+#### **Access Control Complexity**
+- **OpenFGA**: Simple API calls - easily integrated into API gateways
+- **Cedar**: Requires data retrieval and transformation - more complex integration
 
-If the rules for when a user can view a document change, but the data required to make a decision does not, the change is very straightforward in both.
+#### **Maintainability**  
+- **OpenFGA**: Policy changes isolated from application code
+- **Cedar**: Authorization logic coupled with database queries
 
-If the data that's required changes, then Cedar requires you to change the SQL statements. That implies **your access control code is coupled with your application query logic**.
+#### **Operations**
+- **OpenFGA**: Additional service to operate, but dedicated authorization infrastructure
+- **Cedar**: No extra infrastructure, but higher database load
 
-In OpenFGA, if the data is already stored in the OpenFGA database, no changes are needed. If the data is not, you will need to implement a way to synchronize that data ot the OpenFGA database.
+#### **Reverse Queries**
+- **OpenFGA**: Built-in [ListObjects](https://openfga.dev/docs/getting-started/perform-list-objects) and [ListUsers](https://openfga.dev/docs/getting-started/perform-list-users) APIs. The latency for those calls will heavily depend on the authorization model.
+- **Cedar**: Requires encoding authorization logic in SQL, post-filtering results, or use the experimental [partial evaluation implementation](https://www.cedarpolicy.com/blog/partial-evaluation) to generate a filter for your local database.
 
-### Operations
+## Performance Considerations
 
-Running OpenFGA requires operating a cluster of nodes and a database. It will become a crucial component of your application infrastucture that can't fail. 
+Given the differences in architecture, a performance comparison between both engines does not make sense:
 
-Cedar does not require additional infrastucture. However, the database load will be higher, as applications need to retrieve data from transactional databse to inform authorization decision.
+- The raw Authorize call from Cedar will always be much faster than the equivalent OpenFGA operation, as it does not require a network call.
+- The overall performance will depend on how each system retrieves the data required to make the decision. OpenFGA is designed to optimize how traverse the data. Data management is out of scope for Cedar.
+
+## When to Choose Each
+
+### Choose OpenFGA When:
+- You need **fine-grained permissions** with complex inheritance
+- **List operations** are important ("show all documents user can view")
+- You want **authorization data logic separate** from business logic 
+- You require additional data when **additional data** when making authorization decisions
+- Your authorization requirements are **relationship based** rather than attribute-based
+
+### Choose Cedar When:
+- You have **rich entity attributes** that drive decisions
+- You want to **minimize infrastructure** complexity
+- Your authorization is **primarily attribute-based** rather than relationship-based
+- The application already has **all the data required to make authorization decisions**
+
+## Learning Resources
+
+### Cedar
+- [Cedar Documentation](https://docs.cedarpolicy.com/)
+- [Cedar Go SDK](https://github.com/cedar-policy/cedar-go)
+- [Cedar Policy Language Guide](https://docs.cedarpolicy.com/policies/syntax.html)
+- [Cedarland Blog](https://cedarland.blog/)
+
+### OpenFGA
+- [OpenFGA Documentation](https://openfga.dev/)
+- [OpenFGA Go SDK](https://github.com/openfga/go-sdk)  
+- [Zanzibar Paper](https://research.google/pubs/pub48190/) - The original Google paper
+- [OpenFGA Playground](https://play.fga.dev/) - Interactive modeling tool
 
 
-# Running the Cedar and OpenFGA examples
-
-
-# Running the Cedar and OpenFGA examples
