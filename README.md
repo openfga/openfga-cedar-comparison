@@ -414,3 +414,15 @@ Given the differences in architecture, a performance comparison between both eng
 - [OpenFGA Go SDK](https://github.com/openfga/go-sdk)  
 - [Zanzibar Paper](https://research.google/pubs/pub48190/) - The original Google paper
 - [OpenFGA Playground](https://play.fga.dev/) - Interactive modeling tool
+
+## Contributing
+
+See [CONTRIBUTING](https://github.com/openfga/.github/blob/main/CONTRIBUTING.md).
+
+## Author
+
+[OpenFGA](https://github.com/openfga)
+
+## License
+
+This project is licensed under the Apache-2.0 license. See the [LICENSE](https://github.com/openfga/language/blob/main/LICENSE) file for more info.
