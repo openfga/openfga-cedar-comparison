@@ -179,6 +179,8 @@ func checkAuthorization(policySet *cedar.PolicySet, data *EntityData, userID, do
 			editorValues = append(editorValues, cedar.EntityUID(editorUID))
 		}
 		docAttrs["editors"] = cedar.NewSet(editorValues...)
+	} else {
+		docAttrs["editors"] = cedar.NewSet()
 	}
 	if len(data.DocumentPermissions["viewer"]) > 0 {
 		var viewerValues []cedar.Value
@@ -187,6 +189,8 @@ func checkAuthorization(policySet *cedar.PolicySet, data *EntityData, userID, do
 			viewerValues = append(viewerValues, cedar.EntityUID(viewerUID))
 		}
 		docAttrs["viewers"] = cedar.NewSet(viewerValues...)
+	} else {
+		docAttrs["viewers"] = cedar.NewSet()
 	}
 
 	// Create folder entity if exists
@@ -210,7 +214,10 @@ func checkAuthorization(policySet *cedar.PolicySet, data *EntityData, userID, do
 				editorValues = append(editorValues, cedar.EntityUID(editorUID))
 			}
 			folderAttrs["editors"] = cedar.NewSet(editorValues...)
+		} else {
+			folderAttrs["editors"] = cedar.NewSet()
 		}
+
 		if len(data.FolderPermissions["viewer"]) > 0 {
 			var viewerValues []cedar.Value
 			for _, viewerID := range data.FolderPermissions["viewer"] {
@@ -218,6 +225,8 @@ func checkAuthorization(policySet *cedar.PolicySet, data *EntityData, userID, do
 				viewerValues = append(viewerValues, cedar.EntityUID(viewerUID))
 			}
 			folderAttrs["viewers"] = cedar.NewSet(viewerValues...)
+		} else {
+			folderAttrs["viewers"] = cedar.NewSet()
 		}
 
 		folderUID := cedar.NewEntityUID(cedar.EntityType("DocumentManagement::Folder"), cedar.String(*data.FolderID))
