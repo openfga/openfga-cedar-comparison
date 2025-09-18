@@ -90,14 +90,15 @@ INSERT INTO organization_members (user_id, organization_id) VALUES
 -- Folders
 INSERT INTO folders (id, name, organization_id, owner_id) VALUES 
     ('folder1', 'Engineering Docs', 'org1', 'alice'),
-    ('folder2', 'Marketing Materials', 'org2', 'david');
+    ('folder2', 'Marketing Materials', 'org2', 'david'),
+    ('root_folder_org1', 'Root Folder', 'org1', 'alice');
 
 -- Documents
 INSERT INTO documents (id, name, organization_id, owner_id, folder_id) VALUES 
     ('doc1', 'Architecture Guide', 'org1', 'alice', 'folder1'),
     ('doc2', 'API Documentation', 'org1', 'bob', 'folder1'),
     ('doc3', 'Marketing Strategy', 'org2', 'david', 'folder2'),
-    ('doc4', 'Public Document', 'org1', 'alice', NULL);
+    ('doc4', 'Public Document', 'org1', 'alice', 'root_folder_org1');
 
 -- Document permissions
 INSERT INTO document_permissions (document_id, user_id, permission_type) VALUES 
