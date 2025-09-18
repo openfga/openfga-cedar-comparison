@@ -1,53 +1,13 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: openfga-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: openfga
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  migrate:
-    depends_on:
-      postgres:
-        condition: service_healthy
-    image: openfga/openfga:latest
-    container_name: openfga-migrate
-    command: migrate
-    environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://postgres:password@postgres:5432/openfga?sslmode=disable
-    restart: on-failure
 
   openfga:
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     image: openfga/openfga:latest
     container_name: openfga-server
     environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://postgres:password@postgres:5432/openfga?sslmode=disable
+      - OPENFGA_DATASTORE_ENGINE=memory
       - OPENFGA_LOG_LEVEL=info
     command: run
     ports:
       - "8080:8080" # HTTP
       - "8081:8081" # gRPC
       - "3001:3001" # Playground
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:8081"]
-      interval: 5s
-      timeout: 30s
-      retries: 3
-
-volumes:
-  postgres_data:
