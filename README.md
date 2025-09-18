@@ -414,5 +414,3 @@ Given the differences in architecture, a performance comparison between both eng
 - [OpenFGA Go SDK](https://github.com/openfga/go-sdk)  
 - [Zanzibar Paper](https://research.google/pubs/pub48190/) - The original Google paper
 - [OpenFGA Playground](https://play.fga.dev/) - Interactive modeling tool
-
-
