@@ -1,0 +1,114 @@
+name: document_tests
+principals:
+  alice:
+    id: alice
+    roles: ["user"]
+    attr:
+      organization: org1
+  bob:
+    id: bob
+    roles: ["user"]
+    attr:
+      organization: org1
+  charlie:
+    id: charlie
+    roles: ["user"]
+    attr:
+      organization: org1
+  david:
+    id: david
+    roles: ["user"]
+    attr:
+      organization: org2
+
+resources:
+  doc1:
+    kind: document
+    policyVersion: default
+    id: doc1
+    attr:
+      organization: org1
+      owner: alice
+      editors: []
+      viewers: []
+      parent_folder:
+        id: folder1
+        organization: org1
+        owner: alice
+        editors: []
+        viewers: ["bob"]
+  doc2:
+    kind: document
+    policyVersion: default
+    id: doc2
+    attr:
+      organization: org1
+      owner: bob
+      editors: []
+      viewers: ["charlie"]
+      parent_folder:
+        id: folder1
+        organization: org1
+        owner: alice
+        editors: []
+        viewers: ["bob"]
+  doc4:
+    kind: document
+    policyVersion: default
+    id: doc4
+    attr:
+      organization: org1
+      owner: alice
+      editors: ["bob"]
+      viewers: ["charlie"]
+      parent_folder:
+        id: root_folder_org1
+        organization: org1
+        owner: alice
+        editors: []
+        viewers: []
+
+tests:
+  - name: alice can view doc1 (owner)
+    input:
+      principals: ["alice"]
+      resources: ["doc1"]
+      actions: ["ViewDocument"]
+    expected:
+      - principals: ["alice"]
+        resources: ["doc1"]
+        actions:
+          ViewDocument: EFFECT_ALLOW
+
+  - name: charlie can view doc2 (viewer on document)
+    input:
+      principals: ["charlie"]
+      resources: ["doc2"]
+      actions: ["ViewDocument"]
+    expected:
+      - principals: ["charlie"]
+        resources: ["doc2"]
+        actions:
+          ViewDocument: EFFECT_ALLOW
+
+  - name: david cannot view doc1 (different organization)
+    input:
+      principals: ["david"]
+      resources: ["doc1"]
+      actions: ["ViewDocument"]
+    expected:
+      - principals: ["david"]
+        resources: ["doc1"]
+        actions:
+          ViewDocument: EFFECT_DENY
+
+  - name: bob can view doc4 (explicit editor)
+    input:
+      principals: ["bob"]
+      resources: ["doc4"]
+      actions: ["ViewDocument"]
+    expected:
+      - principals: ["bob"]
+        resources: ["doc4"]
+        actions:
+          ViewDocument: EFFECT_ALLOW

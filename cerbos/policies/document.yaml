@@ -1,0 +1,28 @@
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: default
+  resource: document
+  importDerivedRoles:
+    - document_management_roles
+  rules:
+    - actions: ["ViewDocument"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner
+        - editor
+        - viewer
+        - org_member
+        - parent_owner
+        - parent_editor
+        - parent_viewer
+    - actions: ["EditDocument", "ShareDocument"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner
+        - editor
+        - parent_owner
+        - parent_editor
+    - actions: ["DeleteDocument"]
+      effect: EFFECT_ALLOW
+      derivedRoles:
+        - owner

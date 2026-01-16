@@ -1,5 +1,5 @@
 
-# Authorization Frameworks Comparison: Cedar vs OpenFGA
+# Authorization Frameworks Comparison: Cedar vs OpenFGA vs Cerbos
 
 > A comprehensive comparison of two modern authorization frameworks through a practical document management system example.
 
@@ -14,7 +14,7 @@
 
 ## Overview
 
-This repository demonstrates two different approaches for implementing modern application authorization by comparing two open source tools: [OpenFGA](https://openfga.dev/) and [Cedar](https://www.cedarpolicy.com).
+This repository demonstrates three different approaches for implementing modern application authorization by comparing [OpenFGA](https://openfga.dev/), [Cedar](https://www.cedarpolicy.com), and [Cerbos](https://cerbos.dev/).
 
 We implement authorization for a **multi-tenant document management system** with organizations that own folders containing documents - a common real-world scenario that showcases the strengths and trade-offs of each approach.
 
@@ -57,7 +57,15 @@ cd cedar/
 ./cedar-check david doc1     # ❌ Cross-organization denied
 ```
 
-Both examples provide identical authorization decisions using different approaches.
+### Try Cerbos Example  
+```bash
+cd cerbos/
+./setup.sh
+./cerbos-check alice doc1    # ✅ Owner access
+./cerbos-check david doc1    # ❌ Cross-organization denied
+```
+
+All three examples provide identical authorization decisions using different approaches.
 
 ## Architecture Comparison
 
@@ -100,7 +108,7 @@ type document
     define can_share: owner or editor
 ```
 
-> Given that OpenFGA supports recursion, like inheriting folder's permissions, but Cedar does not, we won't be using recursion throughout this example.
+> OpenFGA supports recursion (e.g., inheriting folder permissions). Cedar does not, and while Cerbos can express recursive derived roles, we avoid recursion across all three examples for parity.
 
 In Cedar you can define an entity schema that you can use to validate policies, but is not a requirement. You can find the schema we use for this example [here](cedar/schema.cedarschema). You define the authorization policies in the [Cedar language](https://docs.cedarpolicy.com/policies/syntax-policy.html):
 
@@ -234,6 +242,34 @@ permit(
 
 Both policies are equivalent and hopefully self-explanatory. The approaches are very different though. In OpenFGA permissions are defined in terms of relations, which lets you define all the different ways a user can get a permission in a single line (e.g. ` define viewer: [user] or editor or viewer from parent_folder or member from organization`) while navigating resources hierarchies, and in Cedar you need to define define multiple `permit` clauses.
 
+### Cerbos: PDP with Derived Roles and YAML Policies
+
+Cerbos policies live in YAML and are evaluated by a PDP that can be deployed as a sidecar or shared service. The same document/folder rules are expressed via derived roles and resource policies (note the use of `derivedRoles`, not static `roles`). Example (simplified):
+
+```yaml
+# policies/derived_roles.yaml
+derivedRoles:
+  name: document_management_roles
+  definitions:
+    - name: org_member
+      condition: { match: { expr: request.principal.attr.organization == request.resource.attr.organization } }
+    - name: owner
+      condition: { match: { expr: request.resource.attr.owner == request.principal.id } }
+    - name: parent_editor
+      condition: { match: { expr: request.resource.attr.parent_folder != null && request.resource.attr.parent_folder.editors.contains(request.principal.id) } }
+
+# policies/document.yaml
+resourcePolicy:
+  resource: document
+  importDerivedRoles: [document_management_roles]
+  rules:
+    - actions: ["ViewDocument"]
+      effect: EFFECT_ALLOW
+      roles: [owner, editor, viewer, org_member, parent_owner, parent_editor, parent_viewer]
+```
+
+Clients send HTTP/gRPC `CheckResources` requests with principal/resource attributes. Our Cerbos sample loads the same SQL data as the Cedar example, builds the attribute map (including parent folder permissions), and asks the PDP for a decision.
+
 ## Key Architectural Differences
 
 **OpenFGA: Service-Based Authorization**
@@ -248,6 +284,11 @@ Both policies are equivalent and hopefully self-explanatory. The approaches are 
 - No network calls, but requires you to load the data
 - Authorization logic coupled with data access
 
+**Cerbos: Service-Based PDP with YAML Policies**
+- Runs as a PDP sidecar/shared service (no database when using disk policies)
+- Policies stored as YAML (derived roles + resource rules)
+- Caller loads resource/principal data and sends attributes over HTTP/gRPC
+- Network roundtrip per decision; no policy coupling to application code
 ## Implementation Examples
 
 ### OpenFGA Authorization Check
@@ -333,58 +374,81 @@ WITH user_org AS (
 	) dp ON true
 ```
 
-There are other ways to write a single or multiple queries and get a similar results. After you retrieve the data, you need to convert it to an instance of a Cedar Entity. The [cedar/main.go](cedar/main.go) program has the full example.
+There are other ways to write a single or multiple queries and get a similar results. After you retrieve the data, you need to convert it to an instance of a Cedar Entity. The [cedar/main.go](cedar/main.go) program has the full example. The Cerbos example reuses the same query to build resource/principal attributes before calling the PDP (see [cerbos/main.go](cerbos/main.go)).
+
+### Cerbos Authorization Check
+
+```go
+// 1. Load data from your database (same query as Cedar)
+data, err := queryEntityData(db, userID, documentID)
+
+// 2. Build Cerbos attributes
+attrs := buildResourceAttributes(data)
+
+// 3. Call Cerbos PDP over HTTP
+req := checkRequest{ /* principal with organization attr, resource attrs, action */ }
+resp, _ := client.Post(cerbosCheckEndpoint, "application/json", body)
+decision := resp.Results[0].Actions["ViewDocument"].Effect == "EFFECT_ALLOW"
+```
+
+Cerbos keeps policy evaluation in a service, but—like Cedar—you still load business data from your database to populate request attributes.
 
 ## OpenFGA's Contextual Tuples
 
-In general, when using OpenFGA, you will store all the data required to make authorization decisions in OpenFGA. When using Cedar, you'll store it in your application.
+In general, when using OpenFGA, you will store all the data required to make authorization decisions in OpenFGA. When using Cedar or Cerbos, you'll store it in your application.
 
-However, OpenFGA allows a hybrid model, where you can actually specify the data required to make the decision in [Contextual Tuples](https://openfga.dev/docs/interacting/contextual-tuples). Conceptually, you can do something equivalent to what the Cedar example shows, get all the data from a SQL database, and send it as part of the authorization request.
+However, OpenFGA allows a hybrid model, where you can actually specify the data required to make the decision in [Contextual Tuples](https://openfga.dev/docs/interacting/contextual-tuples). Conceptually, you can do something equivalent to what the Cedar example shows, get all the data from a SQL database, and send it as part of the authorization request. 
 
-It would not make sense to use OpenFGA that way, though. If in all scenarios you are going to first retrieve the data from your database, Cedar is a better option.
+It would not make sense to use OpenFGA that way, though. If in all scenarios you are going to first retrieve the data from your database, Cedar or Cerbos is a better option.
 
 On the other hand, combining having data in OpenFGA AND sending contextual data gives you a lot of flexibility. If you can easily synchronize data to OpenFGA, you'd do that. When you can't, because data is not stored in a database (e.g. the content of an access token), or because synchronizing it is hard, you can send it as part of the request.
 
 ## Trade-offs Analysis
 
-| Aspect | OpenFGA | Cedar |
-|--------|---------|-------|
-| **Latency** | Network call required, but optimized for relationship queries | No network call, but requires data loading |
-| **Complexity** | Simple API calls, easy integration | Complex data loading and entity building |
-| **Maintainability** | Policy changes don't affect app code | Policy changes may require SQL changes |
-| **Operations** | Requires running separate service + database | No additional infrastructure |
-| **List Operations** | Native "list all documents user can view" | Requires custom SQL, post-filtering or experimental partial evaluation |
-| **Data Consistency** | Dual-write problem for data sync | Uses existing transactional data |
-| **Recursion** | Does support modeling recursive permissions | It does not support recursive permissions |
+| Aspect | OpenFGA | Cedar | Cerbos |
+|--------|---------|-------|--------|
+| **Latency** | Network call required, optimized for relationship queries | No network call, but requires data loading | Network call to PDP; decision is fast, data loading on caller |
+| **Complexity** | Simple API calls, easy integration | Complex data loading and entity building | YAML policies + derived roles; client must assemble attributes |
+| **Maintainability** | Policy changes don't affect app code | Policy changes may require SQL changes | Policy-only changes rarely touch code; data loading remains in app |
+| **Operations** | Requires running separate service + database | No additional infrastructure | Requires running PDP service (no DB when using disk storage) |
+| **List Operations** | Native "list all documents user can view" | Requires custom SQL or partial evaluation | Requires custom SQL or indexing in your app |
+| **Data Consistency** | Dual-write problem for data sync | Uses existing transactional data | Uses existing transactional data; no policy data store |
+| **Recursion** | Supports modeling recursive permissions | Does not support recursive permissions | Supports recursive derived roles with care |
 
 ### Detailed Trade-offs
 
 #### **Latency**
 - **OpenFGA**: Network roundtrip required, but queries are optimized and cacheable
 - **Cedar**: No network call, but data loading latency depends on query complexity
+- **Cerbos**: Network roundtrip to PDP; decision is fast, and data loading latency lives in the caller
 
 #### **Access Control Complexity**
 - **OpenFGA**: Simple API calls - easily integrated into API gateways
 - **Cedar**: Requires data retrieval and transformation - more complex integration
+- **Cerbos**: Simple API calls with YAML policies; attribute assembly lives in the app
 
 #### **Maintainability**  
 - **OpenFGA**: Policy changes isolated from application code
 - **Cedar**: Authorization logic coupled with database queries
+- **Cerbos**: Policy changes rarely touch code; only attribute loading changes when data needs expand
 
 #### **Operations**
 - **OpenFGA**: Additional service to operate, but dedicated authorization infrastructure
 - **Cedar**: No extra infrastructure, but higher database load
+- **Cerbos**: PDP service to operate; disk policy store avoids extra data infra
 
 #### **Reverse Queries**
 - **OpenFGA**: Built-in [ListObjects](https://openfga.dev/docs/getting-started/perform-list-objects) and [ListUsers](https://openfga.dev/docs/getting-started/perform-list-users) APIs. The latency for those calls will heavily depend on the authorization model.
 - **Cedar**: Requires encoding authorization logic in SQL, post-filtering results, or use the experimental [partial evaluation implementation](https://www.cedarpolicy.com/blog/partial-evaluation) to generate a filter for your local database.
+- **Cerbos**: Requires custom SQL or indexing in your app; Cerbos focuses on decisioning, not data retrieval
 
 ## Performance Considerations
 
-Given the differences in architecture, a performance comparison between both engines does not make sense:
+Given the differences in architecture, a performance comparison between the engines does not make sense:
 
-- The raw Authorize call from Cedar will always be much faster than the equivalent OpenFGA operation, as it does not require a network call.
-- The overall performance will depend on how each system retrieves the data required to make the decision. OpenFGA is designed to optimize how traverse the data. Data management is out of scope for Cedar.
+- The raw Authorize call from Cedar will always be much faster than the equivalent OpenFGA or Cerbos operation, as it does not require a network call.
+- Cerbos decisions are fast but do incur a network hop; there is no policy database when using disk storage.
+- The overall performance will depend on how each system retrieves the data required to make the decision. OpenFGA is designed to optimize relationship traversal, while Cedar and Cerbos rely on your application to load the right attributes.
 
 ## When to Choose Each
 
@@ -401,6 +465,12 @@ Given the differences in architecture, a performance comparison between both eng
 - Your authorization is **primarily attribute-based** rather than relationship-based
 - The application already has **all the data required to make authorization decisions**
 
+### Choose Cerbos When:
+- You want **policy-as-code** with a service-based PDP (sidecar/shared) rather than an embedded library
+- Teams prefer **YAML policies with derived roles** and a simple check API
+- You already load **business data from your DB** and need a centralized decision point
+- You want **hot-reloadable policies** without redeploying application code
+
 ## Learning Resources
 
 ### Cedar
@@ -414,3 +484,9 @@ Given the differences in architecture, a performance comparison between both eng
 - [OpenFGA Go SDK](https://github.com/openfga/go-sdk)  
 - [Zanzibar Paper](https://research.google/pubs/pub48190/) - The original Google paper
 - [OpenFGA Playground](https://play.fga.dev/) - Interactive modeling tool
+
+### Cerbos
+- [Cerbos Documentation](https://docs.cerbos.dev)
+- [Cerbos Policies](https://docs.cerbos.dev/cerbos/latest/policies/overview.html)
+- [Check Resources API](https://docs.cerbos.dev/cerbos/latest/api/cerboslsp.v1.html#checkresourcesrequest)
+- [Cerbos GitHub](https://github.com/cerbos/cerbos)

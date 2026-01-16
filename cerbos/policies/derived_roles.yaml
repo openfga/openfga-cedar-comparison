@@ -1,0 +1,39 @@
+apiVersion: api.cerbos.dev/v1
+derivedRoles:
+  name: document_management_roles
+  definitions:
+    - name: org_member
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.principal.attr.organization == request.resource.attr.organization
+    - name: owner
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.owner == request.principal.id
+    - name: editor
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.editors != null && request.resource.attr.editors.contains(request.principal.id)
+    - name: viewer
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.viewers != null && request.resource.attr.viewers.contains(request.principal.id)
+    - name: parent_owner
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.parent_folder != null && request.resource.attr.parent_folder.owner == request.principal.id
+    - name: parent_editor
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.parent_folder != null && request.resource.attr.parent_folder.editors != null && request.resource.attr.parent_folder.editors.contains(request.principal.id)
+    - name: parent_viewer
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: request.resource.attr.parent_folder != null && request.resource.attr.parent_folder.viewers != null && request.resource.attr.parent_folder.viewers.contains(request.principal.id)

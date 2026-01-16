@@ -1,0 +1,10 @@
+services:
+  cerbos:
+    image: ghcr.io/cerbos/cerbos:latest
+    command: ["server", "--config=/config/conf.yaml"]
+    volumes:
+      - ./policies:/policies:ro
+      - ./config:/config:ro
+    ports:
+      - "3592:3592" # HTTP
+      - "3593:3593" # gRPC
